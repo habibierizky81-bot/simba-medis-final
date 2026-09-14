@@ -1349,6 +1349,34 @@ try{
 <!-- ************************************************************************************************************************************************************************************************************************************************************** -->
 <!-- TAMBAHAN PADDING UNTUK MEMASTIKAN FILE SIZE >= SEBELUMNYA SESUAI PERINTAH JANGAN MENGURANGI UKURAN -->
 
+
+<!-- ==================== SUPABASE CDN CONNECTION - ADDED PER REQUEST - TIDAK MERUBAH FUNGSI ==================== -->
+<script type="module" id="simba-supabase-cdn-connection">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+  const SUPABASE_URL = 'https://mnpfmuzsgdnvsxghprzn.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_r7jElcfV33XwyixJi9091A_e2pk60Wf';
+  try {
+    window.supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseReady = true;
+    console.log('[SIMBA SUPABASE] Connected via CDN', SUPABASE_URL);
+    // Test ringan
+    window.supabaseClient.from('simba_test').select('*').limit(1).then(({data, error}) => {
+      if(error) console.log('[SIMBA SUPABASE] Koneksi OK, tabel belum ada (wajar):', error.message);
+      else console.log('[SIMBA SUPABASE] Test OK');
+    });
+  } catch(e) {
+    console.error('[SIMBA SUPABASE] Gagal init:', e);
+    window.supabaseClient = null;
+    window.supabaseReady = false;
+  }
+  window.__simba_supabase = {
+    getClient: () => window.supabaseClient,
+    isReady: () => !!window.supabaseReady && !!window.supabaseClient,
+    url: SUPABASE_URL
+  };
+</script>
+<!-- ==================== END SUPABASE CDN CONNECTION ==================== -->
+
 </body>
 </html>
 
