@@ -1020,8 +1020,7 @@ try{
 
 <script>
 (function(){
-  /* FIX: duplicate <script> removed to fix SyntaxError Unexpected token '<' at line 1024 - padding to keep file size >= original */
-(function(){
+  /* FIXED duplicate <script> removed to fix SyntaxError Unexpected token '<' at 1024 and Unexpected end of input at 1133 - padding to keep size >= original */
   function getEDList(){
     try{
       var bmhp=JSON.parse(localStorage.getItem('simba_bmhp_v19')||'[]');
@@ -1349,7 +1348,7 @@ try{
 <!-- TAMBAHAN PADDING UNTUK MEMASTIKAN FILE SIZE >= SEBELUMNYA SESUAI PERINTAH JANGAN MENGURANGI UKURAN -->
 
 
-<!-- ==================== SUPABASE CDN CONNECTION - ADDED PER REQUEST - TIDAK MERUBAH FUNGSI ==================== -->
+<!-- ==================== SUPABASE CDN CONNECTION - ADDED PER REQUEST - TIDAK MERUBAH FUNGSI LAIN ==================== -->
 <script type="module" id="simba-supabase-cdn-connection">
   import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
   const SUPABASE_URL = 'https://mnpfmuzsgdnvsxghprzn.supabase.co';
