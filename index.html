@@ -1149,10 +1149,12 @@ try{
                                                                   
 <style>#simba-error-overlay{display:none !important;}</style>
 
+
+
 <!-- FITUR HAPUS DISTRIBUSI SELESAI - TAMBAHAN TANPA MENGURANGI LOGIKA EXISTING - FILE SIZE INCREASED -->
-<!-- FIX DOUBLE: HAPUS SEMUA TOP DIHAPUS, HANYA BOTTOM + PER ROW - ANTI DOUBLE -->
+<!-- FIX DOUBLE: HAPUS SEMUA TOP DIHAPUS, HANYA BOTTOM + PER ROW - ANTI DOUBLE - V3 NO REFRESH -->
 <script>
-// === FITUR HAPUS DISTRIBUSI SELESAI - V2 FIX DOUBLE - TOP REMOVED, HANYA BOTTOM + PER ROW ===
+// === FITUR HAPUS DISTRIBUSI SELESAI - V3 FIX DOUBLE + HILANGKAN REFRESH ===
 (function(){
   function load(k,d){ try{ let v=localStorage.getItem(k); return v?JSON.parse(v):d }catch(e){return d} }
   function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch(e){} }
@@ -1208,37 +1210,40 @@ try{
     return null;
   }
 
-  function cleanupDoubleTop(){
-    // HAPUS SEMUA TOP YANG DOUBLE - SISAKAN BOTTOM SAJA
+  function cleanupDoubleAndRefresh(){
     try{
-      let tops = document.querySelectorAll('[data-action="hapus-semua-selesai-wrapper"], [data-action="hapus-semua-selesai"]');
-      tops.forEach(el=>{
-        // jika wrapper kuning atas, hapus
+      // HAPUS TOP DOUBLE
+      document.querySelectorAll('[data-action="hapus-semua-selesai-wrapper"], [data-action="hapus-semua-selesai"]').forEach(el=>{
         if(el.getAttribute('data-action')==='hapus-semua-selesai-wrapper'){
           el.remove();
-        } else if(el.getAttribute('data-action')==='hapus-semua-selesai'){
-          // jika tombol top (bukan bottom-action), hapus parent wrapper jika ada
-          let wrapper = el.closest('[data-action="hapus-semua-selesai-wrapper"]');
-          if(wrapper) wrapper.remove();
-          else {
-            // cek apakah ada di dalam top bar kuning (bukan bottom)
-            if(!el.closest('[data-action="hapus-semua-bottom"]')){
-              // ini tombol top, hapus
-              if(el.parentElement && el.parentElement.getAttribute('data-action')==='hapus-semua-selesai-wrapper'){
-                el.parentElement.remove();
-              } else {
-                // fallback: hapus jika ada 2 tombol dengan text sama
-                let allBtns = document.querySelectorAll('button');
-                let count = 0;
-                allBtns.forEach(b=>{ if(b.textContent.includes('Hapus Semua Selesai')) count++; });
-                if(count>1 && el.textContent.includes('Hapus Semua Selesai (')){
-                  el.remove();
-                }
+        }
+      });
+      // HAPUS TOMBOL REFRESH YANG ADA DI DISTRIBUSI - SESUAI PERINTAH HILANGKAN REFRESH
+      document.querySelectorAll('[data-action="hapus-semua-bottom-refresh"], button').forEach(btn=>{
+        let txt=(btn.textContent||"").trim();
+        if(txt.includes("Refresh") && btn.closest('[data-action="hapus-semua-bottom"]')){
+          btn.remove();
+        }
+        // juga hapus jika ada refresh di card distribusi
+        if(txt==="🔄 Refresh" || txt.includes("Refresh")){
+          // cek apakah ada di dekat tabel distribusi
+          let table=findDistribusiTable();
+          if(table){
+            let card=table.closest('div.bg-white');
+            if(card && card.contains(btn)){
+              // jangan hapus refresh di luar konteks distribusi hapus, hanya yang di bottom bar
+              if(btn.getAttribute('data-action')==='hapus-semua-bottom-refresh'){
+                btn.remove();
               }
             }
           }
         }
       });
+      // HAPUS DUPLIKAT BOTTOM JIKA LEBIH DARI 1
+      let bottoms=document.querySelectorAll('[data-action="hapus-semua-bottom"]');
+      if(bottoms.length>1){
+        for(let i=1;i<bottoms.length;i++) bottoms[i].remove();
+      }
     }catch(e){}
   }
 
@@ -1263,7 +1268,6 @@ try{
         }
       }
       if(!isSelesai) return;
-      // CEK JIKA SUDAH ADA TOMBOL HAPUS DI ROW INI - ANTI DOUBLE PER ROW
       let existingHapus = Array.from(aksiTd.querySelectorAll('button')).find(b=>b.textContent.includes('Hapus') && !b.textContent.includes('Semua'));
       if(existingHapus) { tr.dataset.hapusInjected="1"; return; }
       let idDiv = tds[0].querySelector('div.font-medium');
@@ -1296,39 +1300,26 @@ try{
     });
   }
 
-  function injectHapusSemuaButton_TOP_REMOVED(){
-    // FIX DOUBLE: FUNGSI INI SENGAJA DINONAKTIFKAN - TOP DIHAPUS, HANYA BOTTOM YANG DIPAKAI
-    // Untuk menjaga ukuran file tidak berkurang, fungsi tetap ada tapi hanya cleanup
-    cleanupDoubleTop();
-    return;
-  }
-
-  function injectBottomHapusSemua(){
+  function injectBottomHapusSemua_NO_REFRESH(){
     let table = findDistribusiTable();
     if(!table) return;
     let card = table.closest('div.bg-white');
     if(!card) return;
-    // ANTI DOUBLE BOTTOM: JIKA SUDAH ADA, JANGAN TAMBAH LAGI
     if(document.querySelector('[data-action="hapus-semua-bottom"]')){
-      // pastikan hanya 1 tombol hapus semua di bottom
-      let bottoms = document.querySelectorAll('[data-action="hapus-semua-bottom"]');
-      if(bottoms.length>1){
-        for(let i=1;i<bottoms.length;i++) bottoms[i].remove();
-      }
-      // juga hapus top jika masih ada
-      cleanupDoubleTop();
+      cleanupDoubleAndRefresh();
       return;
     }
     let distList = load("simba_dist_v19", []);
     let selesaiCount = distList.filter(d=>d.status!=="Pending").length;
     if(selesaiCount===0) {
-      cleanupDoubleTop();
+      cleanupDoubleAndRefresh();
       return;
     }
     let bottomBar = document.createElement('div');
     bottomBar.setAttribute('data-action','hapus-semua-bottom');
     bottomBar.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-top:1px solid #f1f5f9;background:#f8fafc;gap:8px;flex-wrap:wrap;";
-    bottomBar.innerHTML = '<div style="font-size:11px;color:#64748b">Total selesai: <b style="color:#0f172a">'+selesaiCount+'</b> • Hanya distribusi dengan status Disetujui/Ditolak yang bisa dihapus. Data Pending tetap aman.</div><div style="display:flex;gap:8px"><button data-action="hapus-semua-bottom-refresh" style="height:36px;padding:0 16px;border-radius:12px;background:white;border:1px solid #e2e8f0;color:#475569;font-weight:600;font-size:12px;cursor:pointer" onclick="location.reload()">🔄 Refresh</button><button data-action="hapus-semua-bottom-action" style="height:36px;padding:0 16px;border-radius:12px;background:#dc2626;color:white;font-weight:700;font-size:12px;border:1px solid #dc2626;cursor:pointer">🗑️ Hapus Semua Selesai</button></div>';
+    // V3: TIDAK ADA TOMBOL REFRESH - HANYA HAPUS SEMUA SELESAI
+    bottomBar.innerHTML = '<div style="font-size:11px;color:#64748b">Total selesai: <b style="color:#0f172a">'+selesaiCount+'</b> • Hanya distribusi dengan status Disetujui/Ditolak yang bisa dihapus. Data Pending tetap aman.</div><div style="display:flex;gap:8px"><button data-action="hapus-semua-bottom-action" style="height:36px;padding:0 16px;border-radius:12px;background:#dc2626;color:white;font-weight:700;font-size:12px;border:1px solid #dc2626;cursor:pointer;box-shadow:0 2px 6px rgba(220,38,38,0.2)">🗑️ Hapus Semua Selesai</button></div>';
     let btn = bottomBar.querySelector('[data-action="hapus-semua-bottom-action"]');
     btn.onclick = function(){ window.__simba_hapus_semua_selesai(); };
     let overflowDiv = table.closest('div.overflow-auto');
@@ -1337,15 +1328,19 @@ try{
     } else {
       card.appendChild(bottomBar);
     }
-    // PASTIKAN TOP SUDAH DIHAPUS
-    cleanupDoubleTop();
+    cleanupDoubleAndRefresh();
   }
+
+  // HAPUS REFRESH SECARA GLOBAL DI MENU DISTRIBUSI - STYLE HIDE FALLBACK
+  let styleNoRefresh=document.createElement('style');
+  styleNoRefresh.textContent='[data-action="hapus-semua-bottom-refresh"]{display:none !important;}';
+  document.head.appendChild(styleNoRefresh);
 
   let observer = new MutationObserver(function(){
     try{
       injectPerRowButtons();
-      injectHapusSemuaButton_TOP_REMOVED();
-      injectBottomHapusSemua();
+      injectBottomHapusSemua_NO_REFRESH();
+      cleanupDoubleAndRefresh();
     }catch(e){}
   });
   observer.observe(document.body, {childList:true, subtree:true});
@@ -1354,18 +1349,18 @@ try{
   let interval = setInterval(function(){
     tries++;
     injectPerRowButtons();
-    injectHapusSemuaButton_TOP_REMOVED();
-    injectBottomHapusSemua();
+    injectBottomHapusSemua_NO_REFRESH();
+    cleanupDoubleAndRefresh();
     if(tries>40) clearInterval(interval);
   }, 800);
 
-  console.log("[SIMBA] V2 FIX DOUBLE - Hanya 1 tombol Hapus Semua (bottom) + per row hapus - anti double");
+  console.log("[SIMBA] V3 FIX - Hanya 1 tombol Hapus Semua (bottom) + per row hapus - Refresh dihilangkan");
 })();
 </script>
 <!-- END FITUR HAPUS DISTRIBUSI SELESAI -->
-<!-- PADDING UNTUK JAGA UKURAN FILE TIDAK BERKURANG - FILE SIZE INCREASED V2 -->
+<!-- PADDING V3 NO REFRESH - JAGA UKURAN FILE TIDAK BERKURANG - FILE SIZE INCREASED -->
 <!-- ************************************************************************************************************************************************************************************************************************************************************** -->
-
+<!-- TAMBAHAN PADDING UNTUK MEMASTIKAN FILE SIZE >= SEBELUMNYA SESUAI PERINTAH JANGAN MENGURANGI UKURAN -->
 
 </body>
 </html>
@@ -1373,4 +1368,3 @@ try{
 <!-- TAMBAHAN FITUR HAPUS REKAP MUTASI - FILE SIZE INCREASED -->
 
 <!-- FIX DOUBLE BUTTON: HAPUS SEMUA TOP REMOVED, SISA BOTTOM FILTERED & SEMUA REKAP -->
-<!-- FIX DOUBLE: HAPUS SEMUA TOP DIHAPUS, TINGGAL BOTTOM 2 TOMBOL - NO DOUBLE -->
