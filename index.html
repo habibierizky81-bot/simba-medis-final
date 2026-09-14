@@ -1369,6 +1369,180 @@ try{
 </script>
 <!-- ==================== END SUPABASE CDN CONNECTION ==================== -->
 
+<!-- ==================== SUPABASE SYNC LOGIC - TAMBAHAN TANPA MERUBAH FUNGSI ASLI ==================== -->
+<script type="module" id="simba-supabase-sync">
+  // Tunggu supabaseClient ready
+  const waitForSupabase = () => new Promise((resolve) => {
+    const check = () => {
+      if (window.supabaseClient && window.supabaseReady) resolve(window.supabaseClient);
+      else setTimeout(check, 300);
+    };
+    check();
+  });
+
+  // Sync ke Supabase KV Store
+  window.__simba_sync_to_supabase = async (key, value) => {
+    try {
+      const client = window.supabaseClient;
+      if (!client) return;
+      if (!key.startsWith('simba_')) return;
+      // Jangan sync session atau error overlay
+      if (key === 'simba_session_v19' || key === 'simba_errors') return;
+      const payload = {
+        key: key,
+        value: value,
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await client.from('simba_kv_store').upsert(payload, { onConflict: 'key' });
+      if (error) {
+        console.warn('[SIMBA SYNC] Gagal sync', key, error.message);
+      } else {
+        console.log('[SIMBA SYNC] Synced to Supabase:', key);
+      }
+    } catch(e) {
+      console.warn('[SIMBA SYNC] Exception', e);
+    }
+  };
+
+  // Patch localStorage.setItem agar otomatis sync
+  (function() {
+    const originalSetItem = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = function(k, v) {
+      try {
+        originalSetItem(k, v);
+      } catch(e) {
+        console.warn('localStorage setItem failed', e);
+        return;
+      }
+      // Auto sync jika key simba_*
+      if (k && k.startsWith('simba_')) {
+        try {
+          let parsed;
+          try { parsed = JSON.parse(v); } catch { parsed = v; }
+          // Debounce sync biar tidak spam
+          clearTimeout(window.__simba_sync_debounce);
+          window.__simba_sync_debounce = setTimeout(() => {
+            window.__simba_sync_to_supabase(k, parsed);
+          }, 500);
+        } catch(e) {}
+      }
+    };
+    console.log('[SIMBA SYNC] localStorage.setItem patched for auto-sync');
+  })();
+
+  // Pull dari Supabase saat load awal
+  window.__simba_pull_from_supabase = async (forceOverwrite = false) => {
+    try {
+      const client = await waitForSupabase();
+      console.log('[SIMBA SYNC] Pulling from Supabase...');
+      const { data, error } = await client.from('simba_kv_store').select('*').order('updated_at', { ascending: false });
+      if (error) {
+        console.warn('[SIMBA SYNC] Pull error:', error.message, '- mungkin tabel belum dibuat, jalankan SQL schema');
+        return { success: false, error: error.message };
+      }
+      if (!data || data.length === 0) {
+        console.log('[SIMBA SYNC] Supabase kosong, push data lokal ke Supabase...');
+        // Push semua data lokal yang ada
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('simba_')) {
+            try {
+              const v = JSON.parse(localStorage.getItem(k));
+              await window.__simba_sync_to_supabase(k, v);
+            } catch(e) {}
+          }
+        }
+        return { success: true, pulled: 0, pushed: true };
+      }
+      
+      let pulled = 0;
+      data.forEach(row => {
+        try {
+          const localExisting = localStorage.getItem(row.key);
+          if (!localExisting || forceOverwrite) {
+            localStorage.setItem(row.key, JSON.stringify(row.value));
+            pulled++;
+          } else {
+            // Jika sudah ada, cek apakah data Supabase lebih baru dan beda
+            // Untuk sekarang, jika forceOverwrite=true, timpa semua
+            if (forceOverwrite) {
+              localStorage.setItem(row.key, JSON.stringify(row.value));
+              pulled++;
+            }
+          }
+        } catch(e) {
+          console.warn('Failed to apply', row.key, e);
+        }
+      });
+      
+      console.log(`[SIMBA SYNC] Pulled ${pulled} keys from Supabase, total ${data.length} in cloud`);
+      
+      if (pulled > 0 && !forceOverwrite) {
+        console.log('[SIMBA SYNC] Data baru dari cloud diterapkan, reload untuk lihat perubahan');
+        // Tidak auto-reload agar tidak mengganggu user, tapi bisa manual
+        window.__simba_last_pull_count = pulled;
+      }
+      
+      return { success: true, pulled, total: data.length };
+    } catch(e) {
+      console.error('[SIMBA SYNC] Pull exception:', e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  // Auto pull saat supabase ready (delay 1 detik biar UI siap)
+  waitForSupabase().then(() => {
+    setTimeout(async () => {
+      const result = await window.__simba_pull_from_supabase(false);
+      if (result.success && result.pulled > 0) {
+        console.log(`[SIMBA SYNC] ${result.pulled} data dari Supabase siap, refresh halaman jika ingin lihat data terbaru dari device lain`);
+        // Tampilkan notif kecil
+        try {
+          const notif = document.createElement('div');
+          notif.style.cssText = 'position:fixed;bottom:80px;right:20px;background:#0f172a;color:white;padding:10px 14px;border-radius:10px;font-size:12px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+          notif.innerHTML = `☁️ ${result.pulled} data dari Supabase dimuat. <button onclick="location.reload()" style="margin-left:8px;background:white;color:#0f172a;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-weight:700">Reload</button> <button onclick="this.parentElement.remove()" style="margin-left:4px;background:transparent;color:white;border:1px solid white;padding:4px 8px;border-radius:6px;cursor:pointer">Tutup</button>`;
+          document.body.appendChild(notif);
+          setTimeout(() => { if(notif.parentElement) notif.remove(); }, 10000);
+        } catch(e) {}
+      }
+    }, 1500);
+  });
+
+  // Fungsi manual untuk push semua local ke Supabase (untuk migrasi awal)
+  window.__simba_push_all_to_supabase = async () => {
+    const client = await waitForSupabase();
+    let count = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('simba_')) {
+        try {
+          const v = JSON.parse(localStorage.getItem(k));
+          await window.__simba_sync_to_supabase(k, v);
+          count++;
+        } catch(e) {}
+      }
+    }
+    console.log(`[SIMBA SYNC] Pushed ${count} keys to Supabase`);
+    alert(`Berhasil push ${count} data ke Supabase!`);
+    return count;
+  };
+
+  // Fungsi untuk force pull (timpa local dengan data Supabase)
+  window.__simba_force_pull = async () => {
+    if (!confirm('Timpa data lokal dengan data dari Supabase? Data lokal yang belum sync akan hilang. Lanjutkan?')) return;
+    const result = await window.__simba_pull_from_supabase(true);
+    if (result.success) {
+      alert(`Berhasil pull ${result.pulled} data dari Supabase, halaman akan reload`);
+      location.reload();
+    }
+  };
+
+  console.log('[SIMBA SYNC] Sync logic loaded - gunakan window.__simba_push_all_to_supabase() untuk push awal, window.__simba_force_pull() untuk force pull');
+</script>
+<!-- ==================== END SUPABASE SYNC LOGIC ==================== -->
+
+
+
 </body>
 </html>
 
