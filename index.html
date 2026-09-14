@@ -27,22 +27,9 @@ window.addEventListener('error', function(e){
     console.log("[SIMBA EMBEDDED] Found", KEYS.length, "keys from PC");
     // Auto inject if localStorage kosong atau user masih default (4 user)
     let shouldInject = false;
-    try{
-      let currentUsers = localStorage.getItem("simba_users_v19");
-      if(!currentUsers) shouldInject=true;
-      else {
-        let parsed = JSON.parse(currentUsers);
-        // Jika cuma 4 user default, inject
-        if(parsed.length <= 4) shouldInject=true;
-        // Jika beda jumlah dengan embedded, inject
-        if(embedded.simba_users_v19 && parsed.length !== embedded.simba_users_v19.length) shouldInject=true;
-      }
-    }catch(e){ shouldInject=true; }
-
-    // Force inject flag dari URL ?forceEmbed=1
-    if(location.search.includes("forceEmbed=1")) shouldInject=true;
-
-    if(shouldInject){
+    // MATIKAN - JANGAN PERNAH INJECT LAGI
+    // if(location.search.includes("forceEmbed=1")) shouldInject=true;
+    if(false){ // MATIKAN TOTAL
       console.log("[SIMBA EMBEDDED] Injecting PC data to this device...");
       KEYS.forEach(k=>{
         try{
